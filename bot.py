@@ -1,11 +1,11 @@
 import logging
 from telegram import Update
 from telegram.ext import Updater, CommandHandler, MessageHandler, CallbackContext
-from telegram.ext.filters import Filters
+from telegram.ext import filters  # Filters এর পরিবর্তে এখন filters ইনপোর্ট করতে হবে
 from telethon.sync import TelegramClient
 from telethon.errors import SessionPasswordNeededError
 
-bot_token = '8014475811:AAHnXLAke9XRfNq_LCdhqdcxazMk6nZM8kE'  # Your Bot's Token
+bot_token = '8014475811:AAHnXLAke9XRfNq_LCdhqdcxazMk6nZM8kE  # Your Bot's Token
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
                     level=logging.INFO)
@@ -94,8 +94,8 @@ def main():
     dispatcher = updater.dispatcher
     dispatcher.add_handler(CommandHandler("start", start))
     dispatcher.add_handler(CommandHandler("login", login))
-    dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, verify_otp))
-    dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, check_numbers))
+    dispatcher.add_handler(MessageHandler(filters.Text & ~filters.Command, verify_otp))
+    dispatcher.add_handler(MessageHandler(filters.Text & ~filters.Command, check_numbers))
 
     updater.start_polling()
     updater.idle()
