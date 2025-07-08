@@ -5,7 +5,7 @@ from telegram.ext import filters  # Filters এর পরিবর্তে এ�
 from telethon.sync import TelegramClient
 from telethon.errors import SessionPasswordNeededError
 
-bot_token = '8014475811:AAHnXLAke9XRfNq_LCdhqdcxazMk6nZM8kE  # Your Bot's Token
+bot_token = '8014475811:AAHnXLAke9XRfNq_LCdhqdcxazMk6nZM8kE ' # Your Bot's Token
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
                     level=logging.INFO)
