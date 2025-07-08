@@ -4,7 +4,7 @@ from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, Callb
 from telethon.sync import TelegramClient
 from telethon.errors import SessionPasswordNeededError
 
-bot_token = 'your_bot_token'  # Your Bot's Token
+bot_token = '8014475811:AAHnXLAke9XRfNq_LCdhqdcxazMk6nZM8kE'  # Your Bot's Token
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
                     level=logging.INFO)
