@@ -17,13 +17,13 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Environment Variable থেকে কনফিগারেশন নেওয়া
+# এনভায়রনমেন্ট ভ্যারিয়েবল
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # Render.com থেকে অটোমেটিক সেট হবে
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # Render.com থেকে অটোমেটিকভাবে সেট হবে
 
 app = Flask(__name__)
 
-# কনভারসেশন স্টেট
+# কনভারসেশন স্টেটস
 BOARD, YEAR, ROLL, REG = range(4)
 
 # বোর্ড তালিকা
@@ -34,7 +34,7 @@ boards = {
     "টেকনিক্যাল": "technical"
 }
 
-# রেজাল্ট স্ক্র্যাপিং ফাংশন (ক্যাশিং সহ)
+# রেজাল্ট ফেচিং ফাংশন (ক্যাশিং সহ)
 @lru_cache(maxsize=100)
 def fetch_result(board, year, roll, reg):
     try:
@@ -210,7 +210,7 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.answer()
         await query.edit_message_text("❌ বাতিল করা হয়েছে। /start দিয়ে আবার শুরু করুন।")
     else:
-        await update.message.reply_text("❌ বাতিল করা হয়েছে। /start দিয়ে আবার শুরু করুন।")
+        await update.message.reply_text("❌ বাতিল করা হয়েছে। /start দিয়ে আবার শুরু করুন。")
     
     return ConversationHandler.END
 
@@ -252,6 +252,7 @@ def setup_application():
             REG: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_reg)],
         },
         fallbacks=[CommandHandler('cancel', cancel), CommandHandler('help', help_command)],
+        per_message=False  # PTB warning সমাধানের জন্য
     )
 
     application.add_handler(conv_handler)
@@ -266,7 +267,7 @@ if __name__ == '__main__':
     if WEBHOOK_URL:
         application.run_webhook(
             listen="0.0.0.0",
-            port=int(os.getenv("PORT", 8000)),
+            port=int(os.environ.get("PORT", 8000)),  # Render.com থেকে PORT নেবে
             webhook_url=WEBHOOK_URL,
             secret_token=os.getenv("WEBHOOK_SECRET", "")
         )
