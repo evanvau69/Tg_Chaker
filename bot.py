@@ -18,7 +18,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # এনভায়রনমেন্ট ভ্যারিয়েবল
-BOT_TOKEN = os.getenv("BOT_TOKEN")
+BOT_TOKEN = os.getenv("BOT_TOKEN")  # BOT_TOKEN environment variable থেকে নেওয়া হবে
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # Render.com থেকে অটোমেটিকভাবে সেট হবে
 
 app = Flask(__name__)
@@ -268,8 +268,7 @@ if __name__ == '__main__':
         application.run_webhook(
             listen="0.0.0.0",
             port=int(os.environ.get("PORT", 8000)),  # Render.com থেকে PORT নেবে
-            webhook_url=WEBHOOK_URL,
-            secret_token=os.getenv("WEBHOOK_SECRET", "")
+            webhook_url=WEBHOOK_URL
         )
     else:
         application.run_polling()
