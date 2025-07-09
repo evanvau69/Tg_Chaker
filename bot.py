@@ -9,7 +9,7 @@ from telegram.ext import (
 
 # Environment Variable থেকে Bot Token নেওয়া
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-WEBHOOK_URL = "https://your-render-app-url.onrender.com/webhook"
+WEBHOOK_URL = "https://tg-chaker.onrender.com"
 
 app = Flask(__name__)
 
