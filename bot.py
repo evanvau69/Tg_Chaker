@@ -1,202 +1,131 @@
 import os
-import asyncio
-from pyrogram import Client, errors
-from pyrogram.session import Session
-from flask import Flask, request, jsonify
-from dotenv import load_dotenv
+import requests
+from flask import Flask, request
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import (
+    ApplicationBuilder, CommandHandler, ContextTypes,
+    MessageHandler, CallbackQueryHandler, ConversationHandler, filters
+)
 
-# এনভায়রনমেন্ট ভেরিয়েবল লোড করছি
-load_dotenv()
+# Environment Variable থেকে Bot Token নেওয়া
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+WEBHOOK_URL = "https://your-render-app-url.onrender.com/webhook"
 
 app = Flask(__name__)
 
-# ইউজার সেশন স্টোরেজ
-user_sessions = {}
+# স্টেট সংজ্ঞা
+BOARD, YEAR, ROLL, REG = range(4)
 
-class TelegramCheckerBot:
-    def __init__(self):
-        self.bot_token = os.getenv("TELEGRAM_BOT_TOKEN")  # বট টোকেন
-        self.api_id = None
-        self.api_hash = None
-        self.client = None
+# বোর্ড তালিকা
+boards = {
+    "ঢাকা": "dhaka", "চট্টগ্রাম": "chittagong", "রাজশাহী": "rajshahi",
+    "কুমিল্লা": "comilla", "বরিশাল": "barisal", "সিলেট": "sylhet",
+    "দিনাজপুর": "dinajpur", "যশোর": "jessore", "মাদ্রাসা": "madrasah",
+    "টেকনিক্যাল": "technical"
+}
 
-    async def initialize_client(self, user_id):
-        # প্রতিটি ইউজারের জন্য নতুন ক্লায়েন্ট তৈরি করছি
-        session_name = f"user_{user_id}"
-        self.client = Client(session_name, in_memory=True)
-        return self.client
+@app.route('/')
+def home():
+    return "✅ রেজাল্ট বট চলছে!"
 
-    async def request_credentials(self, user_id):
-        # ইউজারের বর্তমান স্টেপ স্টোর করছি
-        user_sessions[user_id] = {"step": "request_number"}
-        return {
-            "message": "আপনার টেলিগ্রাম ফোন নাম্বার দিন (কান্ট্রি কোড সহ):",
-            "next_step": "wait_for_number"
+@app.route('/webhook', methods=['POST'])
+def webhook():
+    update = Update.de_json(request.get_json(force=True), application.bot)
+    application.update_queue.put(update)
+    return 'ok'
+
+# শুরু কমান্ড
+async def শুরু(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    বোর্ড_তালিকা = list(boards.items())
+    বোর্ড_বাটন = []
+
+    for i in range(0, len(বোর্ড_তালিকা), 2):
+        সারি = []
+        for নাম, কী in বোর্ড_তালিকা[i:i+2]:
+            সারি.append(InlineKeyboardButton(নাম, callback_data=কী))
+        বোর্ড_বাটন.append(সারি)
+
+    await update.message.reply_text(
+        "📚 পরীক্ষার বোর্ড নির্বাচন করুন:",
+        reply_markup=InlineKeyboardMarkup(বোর্ড_বাটন)
+    )
+    return BOARD
+
+# বোর্ড নির্বাচন
+async def বোর্ড_নির্বাচন(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    context.user_data['board'] = query.data
+    await query.message.reply_text("📅 পরীক্ষার সাল লিখুন (যেমনঃ ২০২৫):")
+    return YEAR
+
+# সাল ইনপুট
+async def সাল_নিবে(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data['year'] = update.message.text.strip()
+    await update.message.reply_text("🔢 রোল নম্বর লিখুন:")
+    return ROLL
+
+# রোল ইনপুট
+async def রোল_নিবে(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data['roll'] = update.message.text.strip()
+    await update.message.reply_text("🆔 রেজিস্ট্রেশন নম্বর লিখুন:")
+    return REG
+
+# রেজি ইনপুট এবং রেজাল্ট আনা
+async def রেজি_নিবে(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data['reg'] = update.message.text.strip()
+    await update.message.reply_text("⏳ রেজাল্ট আনা হচ্ছে, অনুগ্রহ করে অপেক্ষা করুন...")
+
+    data = context.user_data
+    ফলাফল = রেজাল্ট_আনো(data['board'], data['year'], data['roll'], data['reg'])
+
+    await update.message.reply_text(ফলাফল)
+    return ConversationHandler.END
+
+# রেজাল্ট স্ক্র্যাপ ফাংশন
+def রেজাল্ট_আনো(বোর্ড, সাল, রোল, রেজি):
+    try:
+        তথ্য = {
+            "exam": "ssc",
+            "year": সাল,
+            "board": বোর্ড,
+            "roll": রোল,
+            "reg": রেজি,
+            "button2": "Submit"
         }
+        রেস = requests.post("https://educationboardresults.gov.bd/index.php", data=তথ্য)
+        if "GPA" in রেস.text:
+            return "✅ রেজাল্ট পাওয়া গেছে!\n(এই অংশে চাইলে HTML থেকে GPA, নাম, সাবজেক্ট আলাদা করে বের করা যাবে।)"
+        else:
+            return "❌ রেজাল্ট খুঁজে পাওয়া যায়নি। তথ্য সঠিকভাবে দিন।"
+    except Exception as e:
+        return f"⚠️ সমস্যা হয়েছে: {e}"
 
-    async def process_phone_number(self, user_id, phone_number):
-        user_sessions[user_id] = {
-            "step": "request_otp",
-            "phone_number": phone_number
-        }
-        
-        try:
-            await self.client.connect()
-            sent_code = await self.client.send_code(phone_number)
-            
-            user_sessions[user_id].update({
-                "phone_code_hash": sent_code.phone_code_hash,
-                "sent_code": sent_code
-            })
-            
-            return {
-                "message": "আপনার মোবাইলে প্রেরিত ৫ ডিজিটের OTP কোডটি দিন:",
-                "next_step": "wait_for_otp"
-            }
-        except Exception as e:
-            return {
-                "error": f"কোড পাঠাতে সমস্যা: {str(e)}",
-                "next_step": "error"
-            }
+# বাতিল
+async def বাতিল(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("❌ বাতিল করা হয়েছে।")
+    return ConversationHandler.END
 
-    async def process_otp(self, user_id, otp):
-        session_data = user_sessions[user_id]
-        session_data["step"] = "check_2fa"
-        
-        try:
-            await self.client.sign_in(
-                session_data["phone_number"],
-                session_data["phone_code_hash"],
-                otp
-            )
-            
-            # সফলভাবে লগইন হয়েছে
-            session_data["step"] = "logged_in"
-            session_data["is_authenticated"] = True
-            
-            # ক্লায়েন্ট থেকে API ID এবং HASH নিচ্ছি
-            self.api_id = self.client.api_id
-            self.api_hash = self.client.api_hash
-            
-            return {
-                "message": "✅ সফলভাবে লগইন করা হয়েছে!\n\nএখন চেক করার জন্য ফোন নাম্বারগুলোর লিস্ট দিন (প্রতি লাইনে একটি নাম্বার):\n\nউদাহরণ:\n1416727252526\n1627265272726\n52726255262662",
-                "next_step": "wait_for_number_list"
-            }
-        except errors.SessionPasswordNeeded:
-            session_data["step"] = "request_2fa"
-            return {
-                "message": "এই অ্যাকাউন্টে 2FA চালু আছে। আপনার পাসওয়ার্ড দিন:",
-                "next_step": "wait_for_2fa"
-            }
-        except Exception as e:
-            return {
-                "error": f"লগইনে সমস্যা: {str(e)}",
-                "next_step": "error"
-            }
+# অ্যাপ তৈরি ও হ্যান্ডলার যোগ
+application = ApplicationBuilder().token(BOT_TOKEN).build()
 
-    async def process_2fa(self, user_id, password):
-        session_data = user_sessions[user_id]
-        
-        try:
-            await self.client.check_password(password)
-            
-            # সফলভাবে লগইন হয়েছে
-            session_data["step"] = "logged_in"
-            session_data["is_authenticated"] = True
-            
-            # ক্লায়েন্ট থেকে API ID এবং HASH নিচ্ছি
-            self.api_id = self.client.api_id
-            self.api_hash = self.client.api_hash
-            
-            return {
-                "message": "✅ সফলভাবে লগইন করা হয়েছে!\n\nএখন চেক করার জন্য ফোন নাম্বারগুলোর লিস্ট দিন (প্রতি লাইনে একটি নাম্বার):\n\nউদাহরণ:\n1416727252526\n1627265272726\n52726255262662",
-                "next_step": "wait_for_number_list"
-            }
-        except Exception as e:
-            return {
-                "error": f"পাসওয়ার্ড ভেরিফিকেশনে সমস্যা: {str(e)}",
-                "next_step": "error"
-            }
+conv_handler = ConversationHandler(
+    entry_points=[CommandHandler("start", শুরু)],
+    states={
+        BOARD: [CallbackQueryHandler(বোর্ড_নির্বাচন)],
+        YEAR: [MessageHandler(filters.TEXT & ~filters.COMMAND, সাল_নিবে)],
+        ROLL: [MessageHandler(filters.TEXT & ~filters.COMMAND, রোল_নিবে)],
+        REG: [MessageHandler(filters.TEXT & ~filters.COMMAND, রেজি_নিবে)],
+    },
+    fallbacks=[CommandHandler("cancel", বাতিল)],
+)
 
-    async def check_numbers(self, user_id, numbers_list):
-        if not user_sessions[user_id].get("is_authenticated"):
-            return {
-                "error": "আপনি লগইন করেননি। প্রথমে লগইন করুন।",
-                "next_step": "error"
-            }
-        
-        # নাম্বার লিস্ট প্রসেসিং
-        numbers = [n.strip() for n in numbers_list.split("\n") if n.strip()]
-        has_account = []
-        no_account = []
-        
-        for number in numbers:
-            try:
-                await self.client.send_code(number)
-                has_account.append(number)
-            except errors.PhoneNumberInvalid:
-                no_account.append(f"{number} - অবৈধ নাম্বার")
-            except errors.PhoneNumberBanned:
-                no_account.append(f"{number} - ব্যান করা নাম্বার")
-            except errors.PhoneNumberUnoccupied:
-                no_account.append(number)
-            except Exception as e:
-                no_account.append(f"{number} - এরর: {str(e)}")
-        
-        # ফরম্যাটেড রেসপন্স তৈরি
-        response_message = ""
-        
-        if has_account:
-            response_message += f"✅ রেজিস্টার্ড নাম্বার ({len(has_account)} টি):\n"
-            response_message += "\n".join(has_account) + "\n\n"
-        
-        if no_account:
-            response_message += f"❎ নন-রেজিস্টার্ড নাম্বার ({len(no_account)} টি):\n"
-            response_message += "\n".join(no_account)
-        
-        return {
-            "message": response_message,
-            "has_account": has_account,
-            "no_account": no_account,
-            "next_step": "completed"
-        }
+application.add_handler(conv_handler)
 
-# ফ্লাস্ক এন্ডপয়েন্টস
-bot = TelegramCheckerBot()
-
-@app.route("/start", methods=["POST"])
-def start():
-    user_id = request.json.get("user_id")
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    response = loop.run_until_complete(bot.initialize_client(user_id))
-    response = loop.run_until_complete(bot.request_credentials(user_id))
-    loop.close()
-    return jsonify(response)
-
-@app.route("/process", methods=["POST"])
-def process():
-    user_id = request.json.get("user_id")
-    user_input = request.json.get("input")
-    
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    
-    session_data = user_sessions.get(user_id, {})
-    
-    if session_data.get("step") == "wait_for_number":
-        response = loop.run_until_complete(bot.process_phone_number(user_id, user_input))
-    elif session_data.get("step") == "wait_for_otp":
-        response = loop.run_until_complete(bot.process_otp(user_id, user_input))
-    elif session_data.get("step") == "wait_for_2fa":
-        response = loop.run_until_complete(bot.process_2fa(user_id, user_input))
-    elif session_data.get("step") == "wait_for_number_list":
-        response = loop.run_until_complete(bot.check_numbers(user_id, user_input))
-    else:
-        response = {"error": "অজানা স্টেপ", "next_step": "error"}
-    
-    loop.close()
-    return jsonify(response)
-
+# Webhook চালু
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    application.run_webhook(
+        listen="0.0.0.0",
+        port=8000,
+        webhook_url=WEBHOOK_URL
+    )
