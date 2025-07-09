@@ -1,274 +1,170 @@
-import os
 import logging
 import requests
-from functools import lru_cache
-from bs4 import BeautifulSoup
 from flask import Flask, request
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import (
-    ApplicationBuilder, CommandHandler, ContextTypes,
-    MessageHandler, CallbackQueryHandler, ConversationHandler, filters
-)
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackQueryHandler, Dispatcher
+from telegram.ext import BasePersistence, PicklePersistence
+from telegram.ext import ConversationHandler
 
-# লগিং কনফিগারেশন
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
-)
-logger = logging.getLogger(__name__)
+# টেলিগ্রাম বটের Token
+TOKEN = '8014475811:AAHnXLAke9XRfNq_LCdhqdcxazMk6nZM8kE'
 
-# এনভায়রনমেন্ট ভ্যারিয়েবল
-BOT_TOKEN = os.getenv("BOT_TOKEN")  # BOT_TOKEN environment variable থেকে নেওয়া হবে
-WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # Render.com থেকে অটোমেটিকভাবে সেট হবে
-
+# Flask app তৈরি
 app = Flask(__name__)
 
-# কনভারসেশন স্টেটস
-BOARD, YEAR, ROLL, REG = range(4)
+# বোর্ডের নামের বাটন
+BOARD_LIST = [
+    "SSC/Dakhil/Equivalent", "JSC/JDC", "SSC/Dakhil", "SSC(Vocational)", "HSC/Alim", 
+    "HSC(Vocational)", "HSC(BM)", "Diploma in Commerce", "Diploma in Business Studies"
+]
 
-# বোর্ড তালিকা
-boards = {
-    "ঢাকা": "dhaka", "চট্টগ্রাম": "chittagong", "রাজশাহী": "rajshahi",
-    "কুমিল্লা": "comilla", "বরিশাল": "barisal", "সিলেট": "sylhet",
-    "দিনাজপুর": "dinajpur", "যশোর": "jessore", "মাদ্রাসা": "madrasah",
-    "টেকনিক্যাল": "technical"
-}
+# কনভার্সেশন স্টেট
+WAITING_YEAR, WAITING_ROLL, WAITING_REG, WAITING_CAPTCHA, WAITING_CAPTCHA_RESPONSE = range(5)
 
-# রেজাল্ট ফেচিং ফাংশন (ক্যাশিং সহ)
-@lru_cache(maxsize=100)
-def fetch_result(board, year, roll, reg):
+# রেজাল্ট ফেচ করার ফাংশন
+def fetch_result(year, board, roll, reg):
+    url = "https://example.com/api/result"  # আপনার সঠিক URL ব্যবহার করুন
+    params = {
+        'year': year,
+        'board': board,
+        'roll': roll,
+        'reg_no': reg
+    }
     try:
-        logger.info(f"Fetching result for: {board}, {year}, {roll}, {reg}")
-        
-        payload = {
-            "exam": "ssc",
-            "year": year,
-            "board": board,
-            "roll": roll,
-            "reg": reg,
-            "button2": "Submit"
-        }
-        
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-        }
-        
-        response = requests.post(
-            "https://educationboardresults.gov.bd/index.php",
-            data=payload,
-            headers=headers,
-            timeout=15
-        )
-        
-        if response.status_code == 200:
-            soup = BeautifulSoup(response.text, 'html.parser')
-            result_table = soup.find('table', {'class': 'black'})
-            
-            if result_table:
-                result_data = {}
-                rows = result_table.find_all('tr')
-                
-                for row in rows:
-                    cols = row.find_all('td')
-                    if len(cols) == 2:
-                        key = cols[0].get_text(strip=True)
-                        value = cols[1].get_text(strip=True)
-                        result_data[key] = value
-                
-                if 'GPA' in result_data:
-                    formatted_result = (
-                        "📌 **রেজাল্ট ডিটেইলস**\n"
-                        f"➖➖➖➖➖➖➖➖➖\n"
-                        f"👤 নাম: {result_data.get('Name', 'N/A')}\n"
-                        f"🔢 রোল: {roll}\n"
-                        f"🏫 বোর্ড: {board.capitalize()}\n"
-                        f"📅 সাল: {year}\n"
-                        f"⭐ GPA: {result_data['GPA']}\n"
-                        f"📊 গ্রেড: {result_data.get('Grade', 'N/A')}\n"
-                        f"➖➖➖➖➖➖➖➖➖\n"
-                        f"📝 /start দিয়ে আবার চেক করুন"
-                    )
-                    return formatted_result
-                
-            return "❌ রেজাল্ট পাওয়া যায়নি। দয়া করে:\n1. তথ্য পুনরায় চেক করুন\n2. পরীক্ষার ফলাফল প্রকাশিত হয়েছে কিনা নিশ্চিত হন\n3. পরে আবার চেষ্টা করুন"
-        
-        return "⚠️ সার্ভারে সমস্যা হচ্ছে। কিছুক্ষণ পর আবার চেষ্টা করুন।"
-    
-    except requests.Timeout:
-        return "⏳ সার্ভার রেসপন্স দিতে বেশি সময় নিচ্ছে। পরে আবার চেষ্টা করুন।"
-    except Exception as e:
-        logger.error(f"Error fetching result: {str(e)}")
-        return f"⚠️ ত্রুটি হয়েছে: {str(e)}"
+        response = requests.get(url, params=params)
+        response.raise_for_status()  # যদি API কল ঠিক না থাকে, তাহলে error দেখাবে
+        result_data = response.json()
+        return result_data
+    except requests.exceptions.RequestException as e:
+        print(f"Error fetching result: {e}")
+        return None
 
-# কমান্ড হ্যান্ডলার
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data.clear()
+# রেজাল্ট দেখানোর ফাংশন
+def show_result(update, context):
+    # ইউজারের ইনপুট থেকে ডেটা সংগ্রহ করা
+    year = context.user_data.get('year')
+    board = context.user_data.get('board')
+    roll = context.user_data.get('roll')
+    reg = context.user_data.get('reg')
     
-    keyboard = []
-    board_items = list(boards.items())
+    # রেজাল্ট ফেচ করা
+    result_data = fetch_result(year, board, roll, reg)
     
-    # 2 কলামে বোর্ড বাটন সাজানো
-    for i in range(0, len(board_items), 2):
-        row = []
-        for name, key in board_items[i:i+2]:
-            row.append(InlineKeyboardButton(name, callback_data=key))
-        keyboard.append(row)
-    
-    keyboard.append([InlineKeyboardButton("❌ বাতিল", callback_data="cancel")])
-    
-    await update.message.reply_text(
-        "📚 **এসএসসি/এইচএসসি রেজাল্ট চেকার**\n"
-        "➖➖➖➖➖➖➖➖➖\n"
-        "প্রথমে আপনার বোর্ড নির্বাচন করুন:",
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
-    return BOARD
-
-async def select_board(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    
-    if query.data == "cancel":
-        return await cancel(update, context)
-    
-    context.user_data['board'] = query.data
-    await query.edit_message_text(
-        text="📅 **পরীক্ষার সাল লিখুন**\n"
-             "উদাহরণ: 2023\n"
-             "(শুধুমাত্র সংখ্যায় লিখুন, ২০০০-২০২৫ এর মধ্যে)",
-        reply_markup=None
-    )
-    return YEAR
-
-async def get_year(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    year = update.message.text.strip()
-    
-    if not year.isdigit() or len(year) != 4 or int(year) < 2000 or int(year) > 2025:
-        await update.message.reply_text(
-            "⚠️ **অবৈধ সাল!**\n"
-            "দয়া করে ২০০০ থেকে ২০২৫ এর মধ্যে একটি সাল লিখুন।\n"
-            "উদাহরণ: 2023"
-        )
-        return YEAR
-    
-    context.user_data['year'] = year
-    await update.message.reply_text(
-        "🔢 **রোল নম্বর লিখুন**\n"
-        "উদাহরণ: 123456\n"
-        "(শুধুমাত্র ৬ ডিজিটের সংখ্যা)"
-    )
-    return ROLL
-
-async def get_roll(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    roll = update.message.text.strip()
-    
-    if not roll.isdigit() or len(roll) != 6:
-        await update.message.reply_text(
-            "⚠️ **অবৈধ রোল নম্বর!**\n"
-            "দয়া করে ৬ ডিজিটের রোল নম্বর লিখুন।\n"
-            "উদাহরণ: 123456"
-        )
-        return ROLL
-    
-    context.user_data['roll'] = roll
-    await update.message.reply_text(
-        "🆔 **রেজিস্ট্রেশন নম্বর লিখুন**\n"
-        "উদাহরণ: 1234567890\n"
-        "(শুধুমাত্র সংখ্যা)"
-    )
-    return REG
-
-async def get_reg(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    reg = update.message.text.strip()
-    
-    if not reg.isdigit():
-        await update.message.reply_text(
-            "⚠️ **অবৈধ রেজিস্ট্রেশন নম্বর!**\n"
-            "দয়া করে শুধুমাত্র সংখ্যায় লিখুন।\n"
-            "উদাহরণ: 1234567890"
-        )
-        return REG
-    
-    context.user_data['reg'] = reg
-    
-    data = context.user_data
-    await update.message.reply_text(
-        "⏳ রেজাল্ট চেক করা হচ্ছে...\n"
-        "একটু অপেক্ষা করুন...",
-        parse_mode='Markdown'
-    )
-    
-    result = fetch_result(data['board'], data['year'], data['roll'], data['reg'])
-    await update.message.reply_text(result, parse_mode='Markdown')
-    
-    return ConversationHandler.END
-
-async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query if hasattr(update, 'callback_query') else None
-    
-    if query:
-        await query.answer()
-        await query.edit_message_text("❌ বাতিল করা হয়েছে। /start দিয়ে আবার শুরু করুন।")
+    if result_data:
+        # রেজাল্ট যদি সঠিকভাবে পাওয়া যায়
+        result_message = f"রেজাল্ট: \n\n"
+        result_message += f"বোর্ড: {board}\n"
+        result_message += f"বছর: {year}\n"
+        result_message += f"রোল: {roll}\n"
+        result_message += f"রেজিস্ট্রেশন নম্বর: {reg}\n"
+        result_message += f"গ্রেড: {result_data['grade']}\n"
+        result_message += f"পাস/ফেল: {result_data['status']}\n"
     else:
-        await update.message.reply_text("❌ বাতিল করা হয়েছে। /start দিয়ে আবার শুরু করুন।")
+        # যদি API থেকে রেজাল্ট পাওয়া না যায়
+        result_message = "দুঃখিত, রেজাল্ট পাওয়া যায়নি। দয়া করে আবার চেষ্টা করুন।"
     
+    update.message.reply_text(result_message)
+
+# স্টার্ট কমান্ড হ্যান্ডলার
+def start(update, context):
+    user_name = update.message.from_user.first_name
+    welcome_message = f"{user_name} স্বাগতম 🌸 রেজাল্ট দেখার জন্য নিচের তথ্য গুলান দিন"
+    
+    keyboard = [[InlineKeyboardButton(option, callback_data=option)] for option in BOARD_LIST]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    update.message.reply_text(welcome_message, reply_markup=reply_markup)
+    
+    return WAITING_YEAR
+
+# বোর্ড সিলেক্ট করার পর
+def button(update, context):
+    query = update.callback_query
+    board = query.data
+    context.user_data['board'] = board
+    query.answer()
+
+    # বোর্ড সিলেক্ট হওয়ার পর, বছর চাওয়া হবে
+    query.edit_message_text(text=f"{board} সিলেক্ট হয়েছে। এখন রেজাল্টের জন্য বছর দিন।")
+    
+    return WAITING_YEAR
+
+# বছর নেওয়ার জন্য
+def get_year(update, context):
+    year = update.message.text
+    context.user_data['year'] = year
+    update.message.reply_text("বোর্ড সিলেক্ট হয়েছে। এবার রোল নম্বর দিন।")
+    
+    return WAITING_ROLL
+
+# রোল নম্বর নেওয়ার জন্য
+def get_roll(update, context):
+    roll = update.message.text
+    context.user_data['roll'] = roll
+    update.message.reply_text("রেজিস্ট্রেশন নম্বর দিন।")
+
+    return WAITING_REG
+
+# রেজিস্ট্রেশন নম্বর নেওয়ার জন্য
+def get_reg(update, context):
+    reg = update.message.text
+    context.user_data['reg'] = reg
+    update.message.reply_text("যদি CAPTCHA দেখায়, বট এর মাধ্যমে পাঠানো হবে।")
+
+    return WAITING_CAPTCHA
+
+# CAPTCHA দেখানোর জন্য
+def captcha(update, context):
+    update.message.reply_text("Captcha কোড সঠিকভাবে দিন")
+    
+    return WAITING_CAPTCHA_RESPONSE
+
+# CAPTCHA এর উত্তর পাওয়া
+def captcha_response(update, context):
+    captcha_answer = update.message.text
+    # CAPTCHA সঠিক হলে রেজাল্ট দেখানো হবে
+    show_result(update, context)
+
     return ConversationHandler.END
 
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    help_text = (
-        "📌 **হেল্প মেনু**\n"
-        "➖➖➖➖➖➖➖➖➖\n"
-        "🔹 /start - রেজাল্ট চেক শুরু করুন\n"
-        "🔹 /help - এই মেসেজ দেখাবে\n"
-        "➖➖➖➖➖➖➖➖➖\n"
-        "⚠️ সমস্যা হলে:\n"
-        "1. তথ্য পুনরায় চেক করুন\n"
-        "2. ইন্টারনেট কানেকশন নিশ্চিত করুন\n"
-        "3. ফলাফল প্রকাশিত হয়েছে কিনা নিশ্চিত হন"
-    )
-    await update.message.reply_text(help_text, parse_mode='Markdown')
-
-# Flask রাউট
-@app.route('/')
-def home():
-    return "✅ রেজাল্ট বট সচল রয়েছে!"
-
+# টেলিগ্রাম বটের Webhook ফাংশন
 @app.route('/webhook', methods=['POST'])
 def webhook():
-    update = Update.de_json(request.get_json(force=True), application.bot)
-    application.update_queue.put(update)
-    return 'ok'
+    # টেলিগ্রাম আপডেট নিন
+    json_str = request.get_data().decode('UTF-8')
+    update = Update.de_json(json_str, updater.bot)
+    dispatcher.process_update(update)
+    return 'OK'
 
-# অ্যাপ্লিকেশন সেটআপ
-def setup_application():
-    application = ApplicationBuilder().token(BOT_TOKEN).build()
+# বটের মূল ফাংশন
+def main():
+    global updater, dispatcher
 
+    # Dispatcher & Updater তৈরি করুন
+    updater = Updater(TOKEN, use_context=True)
+    dispatcher = updater.dispatcher
+
+    # কনভার্সেশন হ্যান্ডলার
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler('start', start)],
         states={
-            BOARD: [CallbackQueryHandler(select_board)],
-            YEAR: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_year)],
-            ROLL: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_roll)],
-            REG: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_reg)],
+            WAITING_YEAR: [MessageHandler(Filters.text & ~Filters.command, get_year)],
+            WAITING_ROLL: [MessageHandler(Filters.text & ~Filters.command, get_roll)],
+            WAITING_REG: [MessageHandler(Filters.text & ~Filters.command, get_reg)],
+            WAITING_CAPTCHA: [MessageHandler(Filters.text & ~Filters.command, captcha)],
+            WAITING_CAPTCHA_RESPONSE: [MessageHandler(Filters.text & ~Filters.command, captcha_response)],
         },
-        fallbacks=[CommandHandler('cancel', cancel), CommandHandler('help', help_command)],
-        per_message=False  # PTB warning সমাধানের জন্য
+        fallbacks=[],
     )
 
-    application.add_handler(conv_handler)
-    application.add_handler(CommandHandler('help', help_command))
-    
-    return application
+    dispatcher.add_handler(conv_handler)
+    dispatcher.add_handler(CallbackQueryHandler(button))
 
-# মেইন ফাংশন
+    # Webhook সেটআপ
+    updater.bot.set_webhook(url="https://your-render-app-name.onrender.com/webhook")
+
+    # Start Flask app
+    app.run(host="0.0.0.0", port=5000)
+
 if __name__ == '__main__':
-    application = setup_application()
-    
-    if WEBHOOK_URL:
-        application.run_webhook(
-            listen="0.0.0.0",
-            port=int(os.environ.get("PORT", 8000)),  # Render.com থেকে PORT নেবে
-            webhook_url=WEBHOOK_URL
-        )
-    else:
-        application.run_polling()
+    main()
