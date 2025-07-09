@@ -210,7 +210,7 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.answer()
         await query.edit_message_text("❌ বাতিল করা হয়েছে। /start দিয়ে আবার শুরু করুন।")
     else:
-        await update.message.reply_text("❌ বাতিল করা হয়েছে। /start দিয়ে আবার শুরু করুন。")
+        await update.message.reply_text("❌ বাতিল করা হয়েছে। /start দিয়ে আবার শুরু করুন।")
     
     return ConversationHandler.END
 
