@@ -9,7 +9,7 @@ from telegram.ext import (
 
 # Environment Variable থেকে Bot Token নেওয়া
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-WEBHOOK_URL = "https://tg-chaker.onrender.com"
+WEBHOOK_URL = "https://tg-chaker.onrender.com"  # তোমার Render URL
 
 app = Flask(__name__)
 
@@ -125,7 +125,7 @@ application.add_handler(conv_handler)
 # Webhook চালু
 if __name__ == "__main__":
     application.run_webhook(
-        listen="0.0.0.0",
-        port=8000,
-        webhook_url=WEBHOOK_URL
+        listen="0.0.0.0",  # সব IP থেকে কানেকশন গ্রহণ করার জন্য
+        port=8000,         # ৮০০০ পোর্টে ওয়েব সার্ভার চালানো
+        webhook_url=WEBHOOK_URL  # তোমার Render webhook URL
     )
