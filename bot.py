@@ -3,25 +3,22 @@ import random
 import string
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
-    Updater,
+    Application,
     CommandHandler,
     CallbackQueryHandler,
-    CallbackContext,
-    ApplicationBuilder,
     ContextTypes
 )
-from telegram.constants import ParseMode
 
 # বট কনফিগারেশন
-BOT_TOKEN = os.getenv('BOT_TOKEN')  # Render.com এ environment variable থেকে নিবে
-GROUP_ID = int(os.getenv('GROUP_ID', '-1002832508143'))  # আপনার গ্রুপ আইডি
-ADMINS = set(map(int, os.getenv('ADMINS', '6165060012').split()))  # অ্যাডমিন আইডি লিস্ট
+BOT_TOKEN = os.getenv('BOT_TOKEN')
+GROUP_ID = int(os.getenv('GROUP_ID', '-1002832508143'))
+ADMINS = set(map(int, os.getenv('ADMINS', '6165060012').split()))
+SECRET_TOKEN = os.getenv('SECRET_TOKEN', ''.join(random.choices(string.ascii_letters + string.digits, k=32)))
 
-# ডাটাবেসের জন্য (Render.com-এ PostgreSQL বা Redis ব্যবহার করতে পারেন)
+# ডাটাবেস সিমুলেশন
 user_data = {}
 spam_list = set()
 
-# হেল্পার ফাংশন
 def generate_order_id():
     return ''.join(random.choices(string.ascii_lowercase + string.digits, k=5))
 
@@ -132,13 +129,6 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     message = ' '.join(context.args)
-    # এখানে ডাটাবেস থেকে সব ইউজার আইডি নিয়ে ব্রডকাস্ট করতে হবে
-    # উদাহরণ:
-    # for user_id in all_users:
-    #     try:
-    #         await context.bot.send_message(chat_id=user_id, text=message)
-    #     except:
-    #         continue
     await update.message.reply_text(f"Broadcast sent to X users")
 
 async def add_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -192,37 +182,29 @@ async def spam_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except ValueError:
         await update.message.reply_text("Invalid user ID")
 
-async def webhook(request):
-    """Render.com-এ Webhook হ্যান্ডলার"""
-    update = Update.de_json(await request.get_json(), bot)
-    await dispatcher.process_update(update)
-    return {"status": "ok"}
-
 def main() -> None:
-    """Render.com-এ Web Service হিসেবে রান করবে"""
-    application = ApplicationBuilder().token(BOT_TOKEN).build()
+    application = Application.builder().token(BOT_TOKEN).build()
 
-    # কমান্ড হ্যান্ডলার
+    # হ্যান্ডলার রেজিস্টার
     application.add_handler(CommandHandler('start', start))
     application.add_handler(CallbackQueryHandler(button_click))
-    
-    # অ্যাডমিন কমান্ডস
     application.add_handler(CommandHandler('broadcast', broadcast))
     application.add_handler(CommandHandler('add_admin', add_admin))
     application.add_handler(CommandHandler('remove_admin', remove_admin))
     application.add_handler(CommandHandler('spam', spam_user))
 
-    # Render.com-এ Web Service হিসেবে রান করবে
     if os.getenv('RENDER'):
         PORT = int(os.getenv('PORT', 10000))
-        WEBHOOK_URL = os.getenv('WEBHOOK_URL') + '/webhook'
+        WEBHOOK_URL = os.getenv('WEBHOOK_URL')
+        
         application.run_webhook(
             listen="0.0.0.0",
             port=PORT,
-            webhook_url=WEBHOOK_URL
+            webhook_url=f"{WEBHOOK_URL}/webhook",
+            secret_token=SECRET_TOKEN,
+            drop_pending_updates=True
         )
     else:
-        # লোকাল টেস্টিং
         application.run_polling()
 
 if __name__ == '__main__':
