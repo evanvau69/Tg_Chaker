@@ -1,4 +1,5 @@
 import os
+import asyncio
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, CallbackContext
 from dotenv import load_dotenv
@@ -152,5 +153,11 @@ async def main() -> None:
     await application.run_polling()
 
 if __name__ == '__main__':
-    import asyncio
-    asyncio.run(main())
+    import sys
+    # Checking if the event loop is already running (to prevent errors)
+    if sys.version_info >= (3, 7):
+        import asyncio
+        asyncio.get_event_loop().run_until_complete(main())
+    else:
+        # If the loop is already running, use asyncio.ensure_future
+        asyncio.ensure_future(main())
