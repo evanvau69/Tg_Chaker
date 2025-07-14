@@ -44,8 +44,8 @@ DURATIONS = {
 
 # পেমেন্ট মেথড
 PAYMENT_METHODS = {
-    "bkash": "Bkash: 0123456789",
-    "nagad": "Nagad: 0123456789",
+    "bkash": "Bkash: Not Added",
+    "nagad": "Nagad: Not Added",
     "binance": "Binance: 1119515774"
 }
 
@@ -72,7 +72,7 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         context.user_data["selected_country"] = query.data
         await show_duration_buttons(query)
     elif query.data == "others":
-        await query.edit_message_text("If You want Others country Proxy Please Inbox Admin")
+        await query.edit_message_text("If You want Others country Proxy Please Inbox Admin @Zero_proxy_1 ")
     elif query.data in DURATIONS:
         context.user_data["selected_duration"] = query.data
         await show_payment_info(query, context)
