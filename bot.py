@@ -173,7 +173,7 @@ async def handle_confirmation(query, context):
         logger.error(f"Error sending message to admin group: {e}")
         await query.edit_message_text("✅ Your order has been received! Please wait for admin confirmation.")
 
-def main() -> None:
+async def main() -> None:
     """এপ্লিকেশন শুরু করবে"""
     application = Application.builder().token(TOKEN).build()
 
@@ -186,11 +186,13 @@ def main() -> None:
     # মেসেজ হ্যান্ডলার
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, start))
 
-    # Render-এর জন্য পোর্ট কনফিগারেশন
-    port = int(os.environ.get("PORT", 5000))
-    
-    # Webhook এর পরিবর্তে Polling ব্যবহার করছি
-    application.run_polling()
+    # Webhook এর জন্য URL কনফিগারেশন
+    webhook_url = os.getenv("WEBHOOK_URL")  # আপনার সার্ভারের URL দিন
+    await application.bot.set_webhook(webhook_url)
+
+    # ওয়েবহুক মোডে বট চলাবে
+    await application.run_polling(drop_pending_updates=True)
 
 if __name__ == '__main__':
-    main()
+    import asyncio
+    asyncio.run(main())
