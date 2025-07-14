@@ -157,19 +157,21 @@ async def handle_confirmation(query, context):
     # অ্যাডমিন গ্রুপে নোটিফিকেশন পাঠানো
     admin_message = (
         "🚀 New Order Arrived!\n\n"
-        f"👤 User: {user.full_name} (@{user.username})\n"
+        f"👤 User: {user.full_name} (@{user.username if user.username else 'N/A'})\n"
         f"🌍 Country: {COUNTRIES.get(selected_country, selected_country)}\n"
         f"⏳ Duration: {duration_info['text']}\n"
         f"💰 Amount: ${duration_info['price']}"
     )
     
-    await context.bot.send_message(
-        chat_id=ADMIN_GROUP_ID,
-        text=admin_message
-    )
-    
-    # ইউজারকে কনফার্মেশন মেসেজ
-    await query.edit_message_text("✅ Your order has been confirmed! Admin will contact you soon.")
+    try:
+        await context.bot.send_message(
+            chat_id=ADMIN_GROUP_ID,
+            text=admin_message
+        )
+        await query.edit_message_text("✅ Your order has been confirmed! Admin will contact you soon.")
+    except Exception as e:
+        logger.error(f"Error sending message to admin group: {e}")
+        await query.edit_message_text("✅ Your order has been received! Please wait for admin confirmation.")
 
 def main() -> None:
     """এপ্লিকেশন শুরু করবে"""
@@ -184,7 +186,10 @@ def main() -> None:
     # মেসেজ হ্যান্ডলার
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, start))
 
-    # পোলিং শুরু করবে
+    # Render-এর জন্য পোর্ট কনফিগারেশন
+    port = int(os.environ.get("PORT", 5000))
+    
+    # Webhook এর পরিবর্তে Polling ব্যবহার করছি
     application.run_polling()
 
 if __name__ == '__main__':
