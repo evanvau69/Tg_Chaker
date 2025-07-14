@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 # এনভায়রনমেন্ট ভেরিয়েবল
 TOKEN = os.getenv("TELEGRAM_TOKEN")
-ADMIN_GROUP_ID = os.getenv("ADMIN_GROUP_ID", "-1001234567890")  # আপনার অ্যাডমিন গ্রুপ আইডি দিয়ে প্রতিস্থাপন করুন
+ADMIN_GROUP_ID = os.getenv("ADMIN_GROUP_ID", "-1001234567890")
 
 # দেশ এবং পতাকা ইমোজি
 COUNTRIES = {
@@ -83,7 +83,6 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 async def show_country_buttons(query):
     """দেশ নির্বাচনের বাটন দেখাবে"""
     keyboard = []
-    # 2টি কলামে বাটন সাজানো
     countries_list = list(COUNTRIES.items())
     for i in range(0, len(countries_list), 2):
         row = []
@@ -155,7 +154,6 @@ async def handle_confirmation(query, context):
     selected_duration = context.user_data.get("selected_duration", "2_hour")
     duration_info = DURATIONS.get(selected_duration, {"text": "", "price": "0.00"})
     
-    # অ্যাডমিন গ্রুপে নোটিফিকেশন পাঠানো
     admin_message = (
         "🚀 New Proxy Order:\n\n"
         f"👤 User: {user.full_name} (@{user.username if user.username else 'N/A'})\n"
@@ -187,30 +185,26 @@ def main() -> None:
     """এপ্লিকেশন শুরু করবে"""
     application = Application.builder().token(TOKEN).build()
 
-    # কমান্ড হ্যান্ডলার
+    # হ্যান্ডলার রেজিস্টার
     application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("buy", start))  # বিকল্প কমান্ড
-
-    # ক্যালব্যাক কুয়েরি হ্যান্ডলার
+    application.add_handler(CommandHandler("buy", start))
     application.add_handler(CallbackQueryHandler(button_click))
-
-    # মেসেজ হ্যান্ডলার
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, start))
 
-    # Render বা Heroku-তে webhook ব্যবহার করবে, লোকালে polling
-    if 'RENDER' in os.environ or 'HEROKU' in os.environ:
+    # Render/Heroku ডিটেকশন
+    if 'RENDER' in os.environ or 'DYNO' in os.environ:
         PORT = int(os.environ.get('PORT', 5000))
-        WEBHOOK_URL = os.environ.get('WEBHOOK_URL', '') + TOKEN
+        WEBHOOK_URL = f"https://{os.environ.get('RENDER_EXTERNAL_HOSTNAME', 'your-app-name.onrender.com')}/{TOKEN}"
         
-        async def post_init(application):
+        # Webhook সেটআপ
+        async def set_webhook():
             await application.bot.set_webhook(WEBHOOK_URL)
         
         application.run_webhook(
             listen="0.0.0.0",
             port=PORT,
-            url_path=TOKEN,
             webhook_url=WEBHOOK_URL,
-            post_init=post_init
+            url_path=TOKEN
         )
     else:
         # লোকাল ডেভেলপমেন্টের জন্য polling
