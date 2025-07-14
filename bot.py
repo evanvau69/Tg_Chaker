@@ -1,8 +1,17 @@
+import os
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Updater, CommandHandler, CallbackQueryHandler, CallbackContext
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, CallbackContext
+from dotenv import load_dotenv
+
+# .env ফাইল থেকে পরিবেশ ভেরিয়েবল লোড করা
+load_dotenv()
+
+# API Token এবং Group Chat ID পরিবেশ থেকে নেওয়া
+API_TOKEN = os.getenv('TELEGRAM_BOT_API_TOKEN')
+GROUP_CHAT_ID = os.getenv('GROUP_CHAT_ID')
 
 # /start কমান্ডের জন্য ফাংশন
-def start(update: Update, context: CallbackContext) -> None:
+async def start(update: Update, context: CallbackContext) -> None:
     user_id = update.message.from_user.id
     welcome_message = f"Hay {user_id}, How Are You?"
     
@@ -10,12 +19,12 @@ def start(update: Update, context: CallbackContext) -> None:
     keyboard = [[InlineKeyboardButton("Buy Proxy 🎉", callback_data='buy_proxy')]]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
-    update.message.reply_text(welcome_message, reply_markup=reply_markup)
+    await update.message.reply_text(welcome_message, reply_markup=reply_markup)
 
 # Buy Proxy বাটনে ক্লিক করলে কি হবে
-def buy_proxy(update: Update, context: CallbackContext) -> None:
+async def buy_proxy(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
-    query.answer()
+    await query.answer()
 
     # 'Which Country Proxy You Want..?'
     keyboard = [
@@ -32,18 +41,18 @@ def buy_proxy(update: Update, context: CallbackContext) -> None:
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
-    query.edit_message_text(text="Which Country Proxy You Want..?", reply_markup=reply_markup)
+    await query.edit_message_text(text="Which Country Proxy You Want..?", reply_markup=reply_markup)
 
 # Country Selection বাটন ক্লিক করলে
-def country_choice(update: Update, context: CallbackContext) -> None:
+async def country_choice(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
-    query.answer()
+    await query.answer()
 
     # ব্যবহারকারী যে দেশ সিলেক্ট করেছে, তা context তে রাখা
     context.user_data['selected_country'] = query.data
 
     if query.data == 'others':
-        query.edit_message_text(text="If You want Others country Proxy Please Inbox Admin")
+        await query.edit_message_text(text="If You want Others country Proxy Please Inbox Admin")
     else:
         # 'How long do you want to take it for?'
         keyboard = [
@@ -53,12 +62,12 @@ def country_choice(update: Update, context: CallbackContext) -> None:
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
-        query.edit_message_text(text="How long do you want to take it for?", reply_markup=reply_markup)
+        await query.edit_message_text(text="How long do you want to take it for?", reply_markup=reply_markup)
 
 # Time duration বাটন ক্লিক করলে
-def time_duration(update: Update, context: CallbackContext) -> None:
+async def time_duration(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
-    query.answer()
+    await query.answer()
 
     country = context.user_data.get('selected_country', 'Unknown Country')  # ব্যবহারকারীর সিলেক্ট করা দেশ
     duration = query.data  # সিলেক্ট করা সময় (যেমন 2_hour, 12_hour, 1_day)
@@ -77,8 +86,8 @@ def time_duration(update: Update, context: CallbackContext) -> None:
     payment_message = f"""
     Pay And Give Screenshot Here ✅ After Payment Press Confirm Button ✅
 
-    Bkash : Not Added
-    Nagad : Not Added
+    Bkash :
+    Nagad :
     Binance : 1119515774
     Amount : {amount}
     Country : {country}
@@ -92,12 +101,12 @@ def time_duration(update: Update, context: CallbackContext) -> None:
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
-    query.edit_message_text(text=payment_message, reply_markup=reply_markup)
+    await query.edit_message_text(text=payment_message, reply_markup=reply_markup)
 
 # Confirm বাটনে ক্লিক করলে
-def confirm_order(update: Update, context: CallbackContext) -> None:
+async def confirm_order(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
-    query.answer()
+    await query.answer()
 
     # ইউজারের নাম, দেশ এবং সময় (Duration) রিটার্ন করার জন্য
     user = query.from_user
@@ -113,35 +122,35 @@ def confirm_order(update: Update, context: CallbackContext) -> None:
     Duration: {selected_duration}
     """
 
-    # Send Confirmation Message to Group (replace 'YOUR_GROUP_CHAT_ID' with actual group chat ID)
-    context.bot.send_message(chat_id='-1002795045866', text=confirmation_message)
+    # Send Confirmation Message to Group (GROUP_CHAT_ID ব্যবহার করা হচ্ছে)
+    await context.bot.send_message(chat_id=GROUP_CHAT_ID, text=confirmation_message)
 
     # Send Confirmation Message to User
-    query.edit_message_text(text=confirmation_message)
+    await query.edit_message_text(text=confirmation_message)
 
 # Cancel বাটনে ক্লিক করলে
-def cancel_order(update: Update, context: CallbackContext) -> None:
+async def cancel_order(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
-    query.answer()
+    await query.answer()
 
-    query.edit_message_text(text="Order Cancelled.")
+    await query.edit_message_text(text="Order Cancelled.")
 
 # Main function to run the bot
-def main() -> None:
-    # Bot token from BotFather
-    updater = Updater("8039756158:AAH1HKrDS2nZ-oybrcM9oR3BS8XKqSeDdKQ")
+async def main() -> None:
+    # Application তৈরি
+    application = Application.builder().token(API_TOKEN).build()
 
     # Handlers
-    updater.dispatcher.add_handler(CommandHandler("start", start))
-    updater.dispatcher.add_handler(CallbackQueryHandler(buy_proxy, pattern='buy_proxy'))
-    updater.dispatcher.add_handler(CallbackQueryHandler(country_choice, pattern='^(us|uk|canada|israel|peru|panama|slovenia|chad|afghanistan|others)$'))
-    updater.dispatcher.add_handler(CallbackQueryHandler(time_duration, pattern='^(2_hour|12_hour|1_day)$'))
-    updater.dispatcher.add_handler(CallbackQueryHandler(confirm_order, pattern='confirm'))
-    updater.dispatcher.add_handler(CallbackQueryHandler(cancel_order, pattern='cancel'))
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CallbackQueryHandler(buy_proxy, pattern='buy_proxy'))
+    application.add_handler(CallbackQueryHandler(country_choice, pattern='^(us|uk|canada|israel|peru|panama|slovenia|chad|afghanistan|others)$'))
+    application.add_handler(CallbackQueryHandler(time_duration, pattern='^(2_hour|12_hour|1_day)$'))
+    application.add_handler(CallbackQueryHandler(confirm_order, pattern='confirm'))
+    application.add_handler(CallbackQueryHandler(cancel_order, pattern='cancel'))
 
     # Start the bot
-    updater.start_polling()
-    updater.idle()
+    await application.run_polling()
 
 if __name__ == '__main__':
-    main()
+    import asyncio
+    asyncio.run(main())
