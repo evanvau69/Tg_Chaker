@@ -1,25 +1,26 @@
 import os
+import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
-    Updater,
+    Application,
     CommandHandler,
     CallbackQueryHandler,
     MessageHandler,
-    Filters,
+    filters,
+    ContextTypes,
     CallbackContext,
 )
-import logging
 
-# লগিং সেটআপ
+# লগিং কনফিগারেশন
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
 
-# এনভায়রনমেন্ট ভেরিয়েবল
+# এনভায়রনমেন্ট ভেরিয়েবল
 TOKEN = os.getenv("TELEGRAM_TOKEN")
-ADMIN_GROUP_ID = os.getenv("ADMIN_GROUP_ID", "-1001234567890")  # আপনার অ্যাডমিন গ্রুপ আইডি
+ADMIN_GROUP_ID = os.getenv("ADMIN_GROUP_ID", "-1001234567890")  # আপনার অ্যাডমিন গ্রুপ আইডি দিয়ে প্রতিস্থাপন করুন
 
 # দেশ এবং পতাকা ইমোজি
 COUNTRIES = {
@@ -43,51 +44,45 @@ DURATIONS = {
 
 # পেমেন্ট মেথড
 PAYMENT_METHODS = {
-    "bkash": "Bkash",
-    "nagad": "Nagad",
-    "binance": "Binance"
+    "bkash": "Bkash: 0123456789",
+    "nagad": "Nagad: 0123456789",
+    "binance": "Binance: 1119515774"
 }
 
-def start(update: Update, context: CallbackContext) -> None:
-    """/start কমান্ড হ্যান্ডলার"""
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """ব্যবহারকারী /start কমান্ড দিলে এই ফাংশন কল হবে"""
     user = update.effective_user
     keyboard = [
         [InlineKeyboardButton("Buy Proxy 🎉", callback_data="buy_proxy")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    update.message.reply_text(
+    await update.message.reply_text(
         f"Hay {user.first_name} How Are You",
         reply_markup=reply_markup
     )
 
-def button(update: Update, context: CallbackContext) -> None:
-    """বাটন ক্লিক হ্যান্ডলার"""
+async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """ইনলাইন বাটনে ক্লিক করলে এই ফাংশন কল হবে"""
     query = update.callback_query
-    query.answer()
+    await query.answer()
 
     if query.data == "buy_proxy":
-        # Buy Proxy বাটনে ক্লিক করলে
-        show_country_buttons(query)
+        await show_country_buttons(query)
     elif query.data in COUNTRIES:
-        # দেশ সিলেক্ট করলে
         context.user_data["selected_country"] = query.data
-        show_duration_buttons(query)
+        await show_duration_buttons(query)
     elif query.data == "others":
-        # Others বাটনে ক্লিক করলে
-        query.edit_message_text("If You want Others country Proxy Please Inbox Admin")
+        await query.edit_message_text("If You want Others country Proxy Please Inbox Admin")
     elif query.data in DURATIONS:
-        # ডুরেশন সিলেক্ট করলে
         context.user_data["selected_duration"] = query.data
-        show_payment_info(query, context)
+        await show_payment_info(query, context)
     elif query.data == "confirm":
-        # Confirm বাটনে ক্লিক করলে
-        handle_confirmation(query, context)
+        await handle_confirmation(query, context)
     elif query.data == "cancel":
-        # Cancel বাটনে ক্লিক করলে
-        query.edit_message_text("Order has been cancelled.")
+        await query.edit_message_text("Order has been cancelled.")
 
-def show_country_buttons(query):
-    """দেশ সিলেক্ট করার বাটন দেখাবে"""
+async def show_country_buttons(query):
+    """দেশ নির্বাচনের বাটন দেখাবে"""
     keyboard = []
     # 2টি কলামে বাটন সাজানো
     countries_list = list(COUNTRIES.items())
@@ -104,13 +99,13 @@ def show_country_buttons(query):
     keyboard.append([InlineKeyboardButton("Others 🌍", callback_data="others")])
     
     reply_markup = InlineKeyboardMarkup(keyboard)
-    query.edit_message_text(
+    await query.edit_message_text(
         text="Which Country Proxy You Want..?",
         reply_markup=reply_markup
     )
 
-def show_duration_buttons(query):
-    """ডুরেশন সিলেক্ট করার বাটন দেখাবে"""
+async def show_duration_buttons(query):
+    """সময়কাল নির্বাচনের বাটন দেখাবে"""
     keyboard = []
     for duration_key, duration_info in DURATIONS.items():
         keyboard.append(
@@ -118,22 +113,22 @@ def show_duration_buttons(query):
         )
     
     reply_markup = InlineKeyboardMarkup(keyboard)
-    query.edit_message_text(
+    await query.edit_message_text(
         text="How long do you want to take it for?",
         reply_markup=reply_markup
     )
 
-def show_payment_info(query, context):
-    """পেমেন্ট ইনফরমেশন দেখাবে"""
+async def show_payment_info(query, context):
+    """পেমেন্ট তথ্য দেখাবে"""
     selected_country = context.user_data.get("selected_country", "Unknown")
     selected_duration = context.user_data.get("selected_duration", "2_hour")
     duration_info = DURATIONS.get(selected_duration, {"text": "", "price": "0.00"})
     
+    payment_text = "\n".join([f"{method}: {details}" for method, details in PAYMENT_METHODS.items()])
+    
     message_text = (
         "Pay And Give Screenshot Here ✅ After Payment Press Confirm Button ✅\n\n"
-        f"Bkash: \n"
-        f"Nagad: \n"
-        f"Binance: 1119515774\n"
+        f"{payment_text}\n"
         f"Amount: ${duration_info['price']}\n"
         f"Country: {COUNTRIES.get(selected_country, selected_country)}\n"
         "For More Payment Please Contact To Admin ✅"
@@ -147,13 +142,13 @@ def show_payment_info(query, context):
     ]
     
     reply_markup = InlineKeyboardMarkup(keyboard)
-    query.edit_message_text(
+    await query.edit_message_text(
         text=message_text,
         reply_markup=reply_markup
     )
 
-def handle_confirmation(query, context):
-    """অর্ডার কনফার্মেশন হ্যান্ডলার"""
+async def handle_confirmation(query, context):
+    """অর্ডার কনফার্মেশন হ্যান্ডেল করবে"""
     user = query.from_user
     selected_country = context.user_data.get("selected_country", "Unknown")
     selected_duration = context.user_data.get("selected_duration", "2_hour")
@@ -161,38 +156,36 @@ def handle_confirmation(query, context):
     
     # অ্যাডমিন গ্রুপে নোটিফিকেশন পাঠানো
     admin_message = (
-        "New Order Arrived!\n\n"
-        f"User Name: {user.full_name}\n"
-        f"Username: @{user.username}\n"
-        f"Country: {COUNTRIES.get(selected_country, selected_country)}\n"
-        f"Duration: {duration_info['text']}"
+        "🚀 New Order Arrived!\n\n"
+        f"👤 User: {user.full_name} (@{user.username})\n"
+        f"🌍 Country: {COUNTRIES.get(selected_country, selected_country)}\n"
+        f"⏳ Duration: {duration_info['text']}\n"
+        f"💰 Amount: ${duration_info['price']}"
     )
     
-    context.bot.send_message(
+    await context.bot.send_message(
         chat_id=ADMIN_GROUP_ID,
         text=admin_message
     )
     
     # ইউজারকে কনফার্মেশন মেসেজ
-    query.edit_message_text("Your order has been confirmed! Admin will contact you soon.")
+    await query.edit_message_text("✅ Your order has been confirmed! Admin will contact you soon.")
 
-def main():
-    """মেইন ফাংশন"""
-    updater = Updater(TOKEN)
-    dispatcher = updater.dispatcher
+def main() -> None:
+    """এপ্লিকেশন শুরু করবে"""
+    application = Application.builder().token(TOKEN).build()
 
     # কমান্ড হ্যান্ডলার
-    dispatcher.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("start", start))
 
-    # ক্যালব্যাক কুয়েরি হ্যান্ডলার
-    dispatcher.add_handler(CallbackQueryHandler(button))
+    # ক্যালব্যাক কুয়েরি হ্যান্ডলার
+    application.add_handler(CallbackQueryHandler(button_click))
 
     # মেসেজ হ্যান্ডলার
-    dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, start))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, start))
 
-    # বট শুরু করুন
-    updater.start_polling()
-    updater.idle()
+    # পোলিং শুরু করবে
+    application.run_polling()
 
 if __name__ == '__main__':
     main()
