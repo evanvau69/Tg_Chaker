@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 # এনভায়রনমেন্ট ভেরিয়েবল
 TOKEN = os.getenv("TELEGRAM_TOKEN")
-ADMIN_GROUP_ID = os.getenv("ADMIN_GROUP_ID", "-1001234567890")  # আপনার অ্যাডমিন গ্রুপ আইডি দিয়ে প্রতিস্থাপন করুন
+ADMIN_GROUP_ID = os.getenv("ADMIN_GROUP_ID", "-1001234567890")
 
 # দেশ এবং পতাকা ইমোজি
 COUNTRIES = {
@@ -86,11 +86,12 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await handle_confirmation(query, context)
     elif query.data == "cancel":
         await query.edit_message_text("❌ Order has been cancelled.")
+    elif query.data == "back_to_start":
+        await start(update, context)
 
 async def show_country_buttons(query):
     """দেশ নির্বাচনের বাটন দেখাবে"""
     keyboard = []
-    # 2টি কলামে বাটন সাজানো
     countries_list = list(COUNTRIES.items())
     for i in range(0, len(countries_list), 2):
         row = []
@@ -166,7 +167,6 @@ async def handle_confirmation(query, context):
     selected_duration = context.user_data.get("selected_duration", "2_hour")
     duration_info = DURATIONS.get(selected_duration, {"text": "", "price": "0.00"})
     
-    # অ্যাডমিন গ্রুপে নোটিফিকেশন পাঠানো
     admin_message = (
         "🚀 New Proxy Order!\n\n"
         f"👤 User: {user.full_name} (@{user.username if user.username else 'N/A'})\n"
@@ -203,27 +203,34 @@ def main() -> None:
     """এপ্লিকেশন শুরু করবে"""
     application = Application.builder().token(TOKEN).build()
 
-    # কমান্ড হ্যান্ডলার
+    # হ্যান্ডলার রেজিস্ট্রেশন
     application.add_handler(CommandHandler("start", start))
-
-    # ক্যালব্যাক কুয়েরি হ্যান্ডলার
     application.add_handler(CallbackQueryHandler(button_click))
-
-    # মেসেজ হ্যান্ডলার
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    # Render-এর জন্য Webhook সেটআপ
+    # Render-এ চালু হলে Webhook মোড ব্যবহার করবে
     if 'RENDER' in os.environ:
-        # Render-এ চলছে
-        WEBHOOK_URL = f"https://{os.getenv('RENDER_EXTERNAL_HOSTNAME')}/{TOKEN}"
-        application.run_webhook(
-            listen="0.0.0.0",
-            port=int(os.environ.get("PORT", 5000)),
-            url_path=TOKEN,
-            webhook_url=WEBHOOK_URL,
-            secret_token='YOUR_SECRET_TOKEN'  # নিরাপত্তার জন্য একটি সিক্রেট টোকেন যোগ করুন
-        )
-        logger.info("Bot running in webhook mode on Render")
+        try:
+            render_hostname = os.getenv('RENDER_EXTERNAL_HOSTNAME')
+            if not render_hostname:
+                raise ValueError("RENDER_EXTERNAL_HOSTNAME environment variable not set")
+                
+            webhook_url = f"https://{render_hostname}/"
+            
+            # Webhook সেটআপ (secret_token ছাড়া)
+            application.run_webhook(
+                listen="0.0.0.0",
+                port=int(os.environ.get("PORT", 5000)),
+                webhook_url=webhook_url,
+                url_path='',  # মূল পাথে webhook রিসিভ করবে
+                cert=None,
+                drop_pending_updates=False
+            )
+            logger.info(f"Bot running in webhook mode at {webhook_url}")
+        except Exception as e:
+            logger.error(f"Webhook setup failed: {e}")
+            # ফ্যালব্যাক হিসেবে পোলিং মোড
+            application.run_polling()
     else:
         # লোকাল ডেভেলপমেন্টের জন্য পোলিং
         application.run_polling()
